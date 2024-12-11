@@ -39,14 +39,6 @@ class MyCharacteristicCallbacks : public BLECharacteristicCallbacks {
     for (int i = 0; i < receivedDataLength && i < 4; i++) {
       receivedData[i] = received[i];
     }
-
-    // In dữ liệu nhận được từ client ra Serial Monitor
-    // Serial.print("Received Data: ");
-    // for (int i = 0; i < receivedDataLength; i++) {
-    //   Serial.print(receivedData[i], HEX);  
-    //   Serial.print(" ");
-    // }
-    // Serial.println();
   }
 };
 
@@ -54,7 +46,7 @@ void setup() {
   Serial.begin(115200);
 
   // Create the BLE Device
-  BLEDevice::init("ESP32 QUYET");
+  BLEDevice::init("ESP32");
 
   // Create the BLE Server
   pServer = BLEDevice::createServer();
