@@ -11,20 +11,27 @@ bool oldDeviceConnected = false;
 uint32_t value = 0;
 
 // Biến lưu trữ dữ liệu nhận từ client
-uint8_t receivedData[4];
+uint8_t receivedData[8];
 int receivedDataLength = 0;  // Để theo dõi độ dài dữ liệu nhận
 
 #define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 
+// Chân GPIO để điều khiển LED D2
+#define LED_PIN 2
+
 class MyServerCallbacks : public BLEServerCallbacks {
   void onConnect(BLEServer *pServer) {
     deviceConnected = true;
     BLEDevice::startAdvertising();
+    // Bật LED khi có thiết bị kết nối
+    digitalWrite(LED_PIN, HIGH);
   };
 
   void onDisconnect(BLEServer *pServer) {
     deviceConnected = false;
+    // Tắt LED khi không còn thiết bị kết nối
+    digitalWrite(LED_PIN, LOW);
   }
 };
 
@@ -36,7 +43,7 @@ class MyCharacteristicCallbacks : public BLECharacteristicCallbacks {
     
     // Lưu trữ dữ liệu nhận được vào mảng receivedData
     receivedDataLength = received.length();
-    for (int i = 0; i < receivedDataLength && i < 4; i++) {
+    for (int i = 0; i < receivedDataLength; i++) {
       receivedData[i] = received[i];
     }
   }
@@ -45,8 +52,12 @@ class MyCharacteristicCallbacks : public BLECharacteristicCallbacks {
 void setup() {
   Serial.begin(115200);
 
+  // Cấu hình LED
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LOW);  // Đảm bảo LED tắt khi bắt đầu
+
   // Create the BLE Device
-  BLEDevice::init("ESP32");
+  BLEDevice::init("ESP32 QUYET");
 
   // Create the BLE Server
   pServer = BLEDevice::createServer();
@@ -102,5 +113,10 @@ void loop() {
   // Kết nối lại khi có thiết bị mới kết nối
   if (deviceConnected && !oldDeviceConnected) {
     oldDeviceConnected = deviceConnected;
+  }
+
+  // Nhấp nháy LED khi có thiết bị kết nối
+  if (deviceConnected) {
+    digitalWrite(LED_PIN, (millis() / 500) % 2);  // Nhấp nháy LED mỗi 500ms
   }
 }
