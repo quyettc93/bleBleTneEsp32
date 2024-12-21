@@ -17,9 +17,13 @@ int receivedDataLength = 0;  // Để theo dõi độ dài dữ liệu nhận
 #define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 
+
 // Chân GPIO để điều khiển LED D2
 #define LED_PIN 2
-int gpioPins[] = {4, 5, 18, 19, 21, 22, 23, 13}; // Các chân GPIO mới
+int gpioPins[] = {4, 5, 18, 19, 21, 22, 13, 12}; // Các chân GPIO mới
+const int gpioCount = 8;                 // Số lượng GPIO được sử dụng
+unsigned long gpioTimers[gpioCount];     // Lưu thời gian bắt đầu trạng thái LOW
+bool gpioStates[gpioCount] = {false};    // Lưu trạng thái hiện tại của từng GPIO
 
 class MyServerCallbacks : public BLEServerCallbacks {
   void onConnect(BLEServer *pServer) {
@@ -98,29 +102,48 @@ void setup() {
 }
 
 void loop() {
-    // Kiểm tra nếu có dữ liệu nhận được và in nó ra
-  if (receivedDataLength > 0) {
-    Serial.print("Received Data in Loop: ");
-    for (int i = 0; i < receivedDataLength; i++) {
-      Serial.print(receivedData[i], BIN);  // Hiển thị từng byte theo dạng BIN
-      Serial.print(" ");
+ // Kiểm tra nếu có dữ liệu nhận được và xử lý
+    if (receivedDataLength > 0) {
+        Serial.print("Received Data in Loop: ");
+        uint8_t processedData[receivedDataLength * 8] = {0};  // Mảng để lưu trữ dữ liệu binary đã lọc
+        int processedIndex = 0;
 
-      // Áp dụng giá trị binary vào các chân GPIO đã chỉ định
-      for (int bit = 0; bit < 8; bit++) {
-        // Kiểm tra từng bit trong byte
-        if (receivedData[i] & (1 << bit)) {
-          Serial.printf("Bit %d active, GPIO %d to 0V for 1s\n", bit, gpioPins[bit]);
-          digitalWrite(gpioPins[bit], LOW); // Đưa chân GPIO xuống 0V
-          delay(1000);               // Giữ trạng thái 1 giây
-          digitalWrite(gpioPins[bit], HIGH); // Đưa chân GPIO lên 24V
+        // Chuyển đổi dữ liệu nhận được thành binary và lưu vào processedData
+        for (int i = 0; i < receivedDataLength; i++) {
+            Serial.print(receivedData[i], BIN);  // Hiển thị từng byte theo dạng BIN
+            Serial.print(" ");
+
+            // Lưu từng bit của byte vào mảng processedData
+            for (int bit = 0; bit < 8; bit++) {
+                processedData[processedIndex++] = (receivedData[i] & (1 << bit)) ? 1 : 0;
+            }
         }
-      }
+        Serial.println();
+
+        // Kích hoạt GPIO dựa trên processedData
+        for (int i = 0; i < processedIndex; i++) {
+            if (processedData[i] == 1) {
+                int gpioIndex = i % gpioCount;  // Lấy chỉ số GPIO phù hợp với bit hiện tại
+                if (!gpioStates[gpioIndex]) {  // Nếu GPIO chưa được kích hoạt
+                    Serial.printf("Bit %d active, GPIO %d to 0V\n", gpioIndex, gpioPins[gpioIndex]);
+                    digitalWrite(gpioPins[gpioIndex], LOW);  // Đưa chân GPIO xuống 0V
+                    gpioStates[gpioIndex] = true;           // Đánh dấu trạng thái đang kích hoạt
+                    gpioTimers[gpioIndex] = millis();       // Lưu thời gian bắt đầu
+                }
+            }
+        }
+
+        receivedDataLength = 0;  // Reset lại độ dài dữ liệu sau khi đã xử lý
     }
 
-    Serial.println();
-    receivedDataLength = 0;  // Reset lại độ dài dữ liệu sau khi đã in ra
-  }
-
+    // Kiểm tra thời gian và tắt các GPIO đã kích hoạt
+    for (int i = 0; i < gpioCount; i++) {
+        if (gpioStates[i] && (millis() - gpioTimers[i] >= 1000)) {
+            Serial.printf("GPIO %d to 24V\n", gpioPins[i]);
+            digitalWrite(gpioPins[i], HIGH);  // Đưa chân GPIO lên 24V
+            gpioStates[i] = false;           // Đặt lại trạng thái
+        }
+    }
 
   // Quản lý kết nối và ngắt kết nối
   if (!deviceConnected && oldDeviceConnected) {
