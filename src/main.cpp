@@ -1,4 +1,4 @@
-#include <Arduino.h>
+#include <Arduino.h> //khai báo thư viện
 #include <BLEDevice.h>
 #include <BLEServer.h>
 #include <BLEUtils.h>
