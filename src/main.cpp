@@ -19,6 +19,7 @@ int receivedDataLength = 0;  // Để theo dõi độ dài dữ liệu nhận
 
 // Chân GPIO để điều khiển LED D2
 #define LED_PIN 2
+int gpioPins[] = {4, 5, 18, 19, 21, 22, 23, 13}; // Các chân GPIO mới
 
 class MyServerCallbacks : public BLEServerCallbacks {
   void onConnect(BLEServer *pServer) {
@@ -56,6 +57,12 @@ void setup() {
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);  // Đảm bảo LED tắt khi bắt đầu
 
+    // Cấu hình các chân GPIO mới làm OUTPUT
+  for (int i = 0; i < 8; i++) {
+    pinMode(gpioPins[i], OUTPUT);
+    digitalWrite(gpioPins[i], HIGH); // Mặc định là 24V (HIGH)
+  }
+
   // Create the BLE Device
   BLEDevice::init("ESP32 QUYET");
 
@@ -91,16 +98,29 @@ void setup() {
 }
 
 void loop() {
-  // Kiểm tra nếu có dữ liệu nhận được và in nó ra
+    // Kiểm tra nếu có dữ liệu nhận được và in nó ra
   if (receivedDataLength > 0) {
     Serial.print("Received Data in Loop: ");
     for (int i = 0; i < receivedDataLength; i++) {
-      Serial.print(receivedData[i], HEX);  // Hiển thị từng byte theo dạng HEX
+      Serial.print(receivedData[i], BIN);  // Hiển thị từng byte theo dạng BIN
       Serial.print(" ");
+
+      // Áp dụng giá trị binary vào các chân GPIO đã chỉ định
+      for (int bit = 0; bit < 8; bit++) {
+        // Kiểm tra từng bit trong byte
+        if (receivedData[i] & (1 << bit)) {
+          Serial.printf("Bit %d active, GPIO %d to 0V for 1s\n", bit, gpioPins[bit]);
+          digitalWrite(gpioPins[bit], LOW); // Đưa chân GPIO xuống 0V
+          delay(1000);               // Giữ trạng thái 1 giây
+          digitalWrite(gpioPins[bit], HIGH); // Đưa chân GPIO lên 24V
+        }
+      }
     }
+
     Serial.println();
     receivedDataLength = 0;  // Reset lại độ dài dữ liệu sau khi đã in ra
   }
+
 
   // Quản lý kết nối và ngắt kết nối
   if (!deviceConnected && oldDeviceConnected) {
