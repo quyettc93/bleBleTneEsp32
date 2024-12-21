@@ -20,10 +20,15 @@ int receivedDataLength = 0;  // Để theo dõi độ dài dữ liệu nhận
 
 // Chân GPIO để điều khiển LED D2
 #define LED_PIN 2
-int gpioPins[] = {4, 5, 18, 19, 21, 22, 13, 12}; // Các chân GPIO mới
-const int gpioCount = 8;                 // Số lượng GPIO được sử dụng
-unsigned long gpioTimers[gpioCount];     // Lưu thời gian bắt đầu trạng thái LOW
-bool gpioStates[gpioCount] = {false};    // Lưu trạng thái hiện tại của từng GPIO
+int gpioPins[] = {4, 5, 18, 19, 21, 22, 13, 12}; // Các chân GPIO chính
+int extendedGpioPins[] = {14, 27, 26};         // Các chân GPIO bổ sung cho byte thứ tư
+const int gpioCount = 8;                       // Số lượng GPIO chính được sử dụng
+unsigned long gpioTimers[gpioCount];           // Lưu thời gian bắt đầu trạng thái LOW
+bool gpioStates[gpioCount] = {false};          // Lưu trạng thái hiện tại của từng GPIO
+unsigned long extendedGpioTimers[3];           // Lưu thời gian cho GPIO bổ sung
+bool extendedGpioStates[3] = {false};          // Trạng thái GPIO bổ sung
+bool previousGpio26BitState = false;  // Biến lưu trạng thái bit thứ ba của GPIO 26 trước đó
+int abc = 0;
 
 class MyServerCallbacks : public BLEServerCallbacks {
   void onConnect(BLEServer *pServer) {
@@ -66,6 +71,10 @@ void setup() {
     pinMode(gpioPins[i], OUTPUT);
     digitalWrite(gpioPins[i], HIGH); // Mặc định là 24V (HIGH)
   }
+      for (int i = 0; i < 3; i++) {
+        pinMode(extendedGpioPins[i], OUTPUT);
+        digitalWrite(extendedGpioPins[i], HIGH); // Ban đầu đặt HIGH (24V)
+    }
 
   // Create the BLE Device
   BLEDevice::init("ESP32 QUYET");
@@ -102,41 +111,57 @@ void setup() {
 }
 
 void loop() {
- // Kiểm tra nếu có dữ liệu nhận được và xử lý
+    // Kiểm tra nếu có dữ liệu nhận được và xử lý
     if (receivedDataLength > 0) {
         Serial.print("Received Data in Loop: ");
-        uint8_t processedData[receivedDataLength * 8] = {0};  // Mảng để lưu trữ dữ liệu binary đã lọc
+        uint8_t processedData[gpioCount * 8] = {0};  // Mảng để lưu trữ dữ liệu binary đã lọc
         int processedIndex = 0;
 
-        // Chuyển đổi dữ liệu nhận được thành binary và lưu vào processedData
-        for (int i = 0; i < receivedDataLength; i++) {
-            Serial.print(receivedData[i], BIN);  // Hiển thị từng byte theo dạng BIN
-            Serial.print(" ");
-
-            // Lưu từng bit của byte vào mảng processedData
-            for (int bit = 0; bit < 8; bit++) {
-                processedData[processedIndex++] = (receivedData[i] & (1 << bit)) ? 1 : 0;
-            }
+        // Lấy byte đầu tiên và xử lý như cũ
+        for (int bit = 0; bit < 8; bit++) {
+            processedData[processedIndex++] = (receivedData[0] & (1 << bit)) ? 1 : 0;
         }
-        Serial.println();
 
         // Kích hoạt GPIO dựa trên processedData
-        for (int i = 0; i < processedIndex; i++) {
-            if (processedData[i] == 1) {
-                int gpioIndex = i % gpioCount;  // Lấy chỉ số GPIO phù hợp với bit hiện tại
-                if (!gpioStates[gpioIndex]) {  // Nếu GPIO chưa được kích hoạt
-                    Serial.printf("Bit %d active, GPIO %d to 0V\n", gpioIndex, gpioPins[gpioIndex]);
-                    digitalWrite(gpioPins[gpioIndex], LOW);  // Đưa chân GPIO xuống 0V
-                    gpioStates[gpioIndex] = true;           // Đánh dấu trạng thái đang kích hoạt
-                    gpioTimers[gpioIndex] = millis();       // Lưu thời gian bắt đầu
-                }
+        for (int i = 0; i < gpioCount; i++) {
+            if (processedData[i] == 1 && !gpioStates[i]) {
+                Serial.printf("Bit %d active, GPIO %d to 0V\n", i, gpioPins[i]);
+                digitalWrite(gpioPins[i], LOW);  // Đưa chân GPIO xuống 0V
+                gpioStates[i] = true;            // Đánh dấu trạng thái đang kích hoạt
+                gpioTimers[i] = millis();        // Lưu thời gian bắt đầu
             }
         }
 
+        // Lấy byte thứ tư và xử lý 3 chân GPIO bổ sung
+for (int bit = 0; bit < 3; bit++) {
+    if (bit < 2) {
+        if (receivedData[3] & (1 << bit)) {
+            if (!extendedGpioStates[bit]) {
+                Serial.printf("Extra Bit %d active, GPIO %d to 0V\n", bit, extendedGpioPins[bit]);
+                digitalWrite(extendedGpioPins[bit], LOW); // Đưa chân GPIO xuống 0V
+                extendedGpioStates[bit] = true;           // Đánh dấu trạng thái đang kích hoạt
+                extendedGpioTimers[bit] = millis();       // Lưu thời gian bắt đầu
+            }
+        }
+    } else {  // Nếu bit >= 2 (tức bit == 2)
+        abc++;  // Tăng abc khi bit thứ 3 của byte thứ 4 là 1
+        Serial.print("abc: ");
+        Serial.println(abc);
+        
+        // Kiểm tra nếu abc là số lẻ hoặc số chẵn và điều khiển GPIO26
+        if (abc % 2 == 1) {  // Số lẻ
+            digitalWrite(26, HIGH);  // Tắt GPIO26
+            Serial.println("GPIO26 is ON (abc is odd).");
+        } else {  // Số chẵn
+            digitalWrite(26, LOW);  // Bật GPIO26
+            Serial.println("GPIO26 is OFF (abc is even).");
+        }
+    }
+}
         receivedDataLength = 0;  // Reset lại độ dài dữ liệu sau khi đã xử lý
     }
 
-    // Kiểm tra thời gian và tắt các GPIO đã kích hoạt
+    // Kiểm tra thời gian và tắt các GPIO chính đã kích hoạt
     for (int i = 0; i < gpioCount; i++) {
         if (gpioStates[i] && (millis() - gpioTimers[i] >= 1000)) {
             Serial.printf("GPIO %d to 24V\n", gpioPins[i]);
@@ -145,21 +170,30 @@ void loop() {
         }
     }
 
-  // Quản lý kết nối và ngắt kết nối
-  if (!deviceConnected && oldDeviceConnected) {
-    delay(500);  // Cho stack Bluetooth cơ hội khởi động lại
-    pServer->startAdvertising();  // Restart quảng bá BLE
-    Serial.println("Start advertising");
-    oldDeviceConnected = deviceConnected;
-  }
+    // Kiểm tra thời gian và tắt các GPIO bổ sung đã kích hoạt
+    for (int i = 0; i < 3; i++) {
+        if (extendedGpioStates[i] && (millis() - extendedGpioTimers[i] >= 1000)) {
+            Serial.printf("Extended GPIO %d to 24V\n", extendedGpioPins[i]);
+            digitalWrite(extendedGpioPins[i], HIGH);  // Đưa chân GPIO lên 24V
+            extendedGpioStates[i] = false;           // Đặt lại trạng thái
+        }
+    }
 
-  // Kết nối lại khi có thiết bị mới kết nối
-  if (deviceConnected && !oldDeviceConnected) {
-    oldDeviceConnected = deviceConnected;
-  }
+    // Quản lý kết nối và ngắt kết nối
+    if (!deviceConnected && oldDeviceConnected) {
+        delay(500);  // Cho stack Bluetooth cơ hội khởi động lại
+        pServer->startAdvertising();  // Restart quảng bá BLE
+        Serial.println("Start advertising");
+        oldDeviceConnected = deviceConnected;
+    }
 
-  // Nhấp nháy LED khi có thiết bị kết nối
-  if (deviceConnected) {
-    digitalWrite(LED_PIN, (millis() / 500) % 2);  // Nhấp nháy LED mỗi 500ms
-  }
+    // Kết nối lại khi có thiết bị mới kết nối
+    if (deviceConnected && !oldDeviceConnected) {
+        oldDeviceConnected = deviceConnected;
+    }
+
+    // Nhấp nháy LED khi có thiết bị kết nối
+    if (deviceConnected) {
+        digitalWrite(LED_PIN, (millis() / 500) % 2);  // Nhấp nháy LED mỗi 500ms
+    }
 }
