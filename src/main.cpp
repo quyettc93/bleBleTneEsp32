@@ -125,7 +125,7 @@ void loop() {
         }
 
         // Lấy byte thứ tư và xử lý 3 chân GPIO bổ sung
-for (int bit = 0; bit < 3; bit++) {
+        for (int bit = 0; bit < 3; bit++) {
         if ((receivedData[3] & (1 << bit)) && (bit != 2)) {
             if (!extendedGpioStates[bit]) {
                 Serial.printf("Extra Bit %d active, GPIO %d to 24V\n", bit, extendedGpioPins[bit]);
