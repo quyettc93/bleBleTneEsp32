@@ -72,7 +72,7 @@ void setup() {
   }
       for (int i = 0; i < 3; i++) {
         pinMode(extendedGpioPins[i], OUTPUT);
-        digitalWrite(extendedGpioPins[i], HIGH); // Ban đầu đặt HIGH (24V)
+        digitalWrite(extendedGpioPins[i], LOW); // Ban đầu đặt tHẤP (0V)
     }
 
   // Create the BLE Device
