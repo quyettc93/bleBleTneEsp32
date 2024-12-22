@@ -27,8 +27,7 @@ unsigned long gpioTimers[gpioCount];           // Lưu thời gian bắt đầu 
 bool gpioStates[gpioCount] = {false};          // Lưu trạng thái hiện tại của từng GPIO
 unsigned long extendedGpioTimers[3];           // Lưu thời gian cho GPIO bổ sung
 bool extendedGpioStates[3] = {false};          // Trạng thái GPIO bổ sung
-bool previousGpio26BitState = false;  // Biến lưu trạng thái bit thứ ba của GPIO 26 trước đó
-int abc = 0;
+int holdCount = 0;
 
 class MyServerCallbacks : public BLEServerCallbacks {
   void onConnect(BLEServer *pServer) {
@@ -134,22 +133,24 @@ void loop() {
 
         // Lấy byte thứ tư và xử lý 3 chân GPIO bổ sung
 for (int bit = 0; bit < 3; bit++) {
-    if (bit < 2) {
-        if (receivedData[3] & (1 << bit)) {
+        if ((receivedData[3] & (1 << bit)) && (bit != 2)) {
             if (!extendedGpioStates[bit]) {
-                Serial.printf("Extra Bit %d active, GPIO %d to 0V\n", bit, extendedGpioPins[bit]);
-                digitalWrite(extendedGpioPins[bit], LOW); // Đưa chân GPIO xuống 0V
+                Serial.printf("Extra Bit %d active, GPIO %d to 24V\n", bit, extendedGpioPins[bit]);
+                digitalWrite(extendedGpioPins[bit], HIGH); // Đưa chân GPIO LÊN 24v
                 extendedGpioStates[bit] = true;           // Đánh dấu trạng thái đang kích hoạt
                 extendedGpioTimers[bit] = millis();       // Lưu thời gian bắt đầu
             }
         }
-    } else {  // Nếu bit >= 2 (tức bit == 2)
-        abc++;  // Tăng abc khi bit thứ 3 của byte thứ 4 là 1
-        Serial.print("abc: ");
-        Serial.println(abc);
+         if((receivedData[3] & (1 << bit)) && (bit == 2)) {  // Nếu bit >= 2 (tức bit == 2)
+        holdCount++;  // Tăng abc khi bit thứ 3 của byte thứ 4 là 1
+        if(holdCount == 10) {  // Nếu abc = 255 thì reset abc về 0
+            holdCount = 0;
+        }
+        Serial.print("holdCount: ");
+        Serial.println(holdCount);
         
         // Kiểm tra nếu abc là số lẻ hoặc số chẵn và điều khiển GPIO26
-        if (abc % 2 == 1) {  // Số lẻ
+        if (holdCount % 2 == 1) {  // Số lẻ
             digitalWrite(26, HIGH);  // Tắt GPIO26
             Serial.println("GPIO26 is ON (abc is odd).");
         } else {  // Số chẵn
@@ -157,6 +158,7 @@ for (int bit = 0; bit < 3; bit++) {
             Serial.println("GPIO26 is OFF (abc is even).");
         }
     }
+    
 }
         receivedDataLength = 0;  // Reset lại độ dài dữ liệu sau khi đã xử lý
     }
@@ -165,7 +167,7 @@ for (int bit = 0; bit < 3; bit++) {
     for (int i = 0; i < gpioCount; i++) {
         if (gpioStates[i] && (millis() - gpioTimers[i] >= 1000)) {
             Serial.printf("GPIO %d to 24V\n", gpioPins[i]);
-            digitalWrite(gpioPins[i], HIGH);  // Đưa chân GPIO lên 24V
+            digitalWrite(gpioPins[i], HIGH);  // Đưa chân GPIO xuống 24V
             gpioStates[i] = false;           // Đặt lại trạng thái
         }
     }
@@ -173,8 +175,8 @@ for (int bit = 0; bit < 3; bit++) {
     // Kiểm tra thời gian và tắt các GPIO bổ sung đã kích hoạt
     for (int i = 0; i < 3; i++) {
         if (extendedGpioStates[i] && (millis() - extendedGpioTimers[i] >= 1000)) {
-            Serial.printf("Extended GPIO %d to 24V\n", extendedGpioPins[i]);
-            digitalWrite(extendedGpioPins[i], HIGH);  // Đưa chân GPIO lên 24V
+            Serial.printf("Extended GPIO %d to 0V\n", extendedGpioPins[i]);
+            digitalWrite(extendedGpioPins[i], LOW);  // Đưa chân GPIO lên 0v
             extendedGpioStates[i] = false;           // Đặt lại trạng thái
         }
     }
