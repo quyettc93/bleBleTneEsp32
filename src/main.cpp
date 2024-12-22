@@ -108,22 +108,15 @@ void setup() {
   BLEDevice::startAdvertising();
   Serial.println("Waiting a client connection to notify...");
 }
-
+// THỬ NGHIỆM
 void loop() {
     // Kiểm tra nếu có dữ liệu nhận được và xử lý
     if (receivedDataLength > 0) {
         Serial.print("Received Data in Loop: ");
-        uint8_t processedData[gpioCount * 8] = {0};  // Mảng để lưu trữ dữ liệu binary đã lọc
-        int processedIndex = 0;
-
-        // Lấy byte đầu tiên và xử lý như cũ
-        for (int bit = 0; bit < 8; bit++) {
-            processedData[processedIndex++] = (receivedData[0] & (1 << bit)) ? 1 : 0;
-        }
-
-        // Kích hoạt GPIO dựa trên processedData
+        
+        // Lấy byte thứ nhất và xử lý 8 chân GPIO chính
         for (int i = 0; i < gpioCount; i++) {
-            if (processedData[i] == 1 && !gpioStates[i]) {
+            if (receivedData[0] & (1 << i)) {
                 Serial.printf("Bit %d active, GPIO %d to 0V\n", i, gpioPins[i]);
                 digitalWrite(gpioPins[i], LOW);  // Đưa chân GPIO xuống 0V
                 gpioStates[i] = true;            // Đánh dấu trạng thái đang kích hoạt
