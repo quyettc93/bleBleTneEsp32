@@ -27,7 +27,7 @@ unsigned long gpioTimers[gpioCount]; // Lưu thời gian bắt đầu trạng th
 bool gpioStates[gpioCount] = {false}; // Lưu trạng thái hiện tại của từng GPIO
 unsigned long extendedGpioTimers[3];  // Lưu thời gian cho GPIO bổ sung
 bool extendedGpioStates[3] = {false}; // Trạng thái GPIO bổ sung
-int holdCount = 0;
+bool holdCount = false;
 
 class MyServerCallbacks : public BLEServerCallbacks {
   void onConnect(BLEServer *pServer) {
@@ -143,21 +143,18 @@ void loop() {
         }
       }
       if ((receivedData[3] & (1 << bit)) &&
-          (bit == 2)) { // Nếu bit >= 2 (tức bit == 2)
-        holdCount++;    // Tăng abc khi bit thứ 3 của byte thứ 4 là 1
-        if (holdCount == 10) { // Nếu abc = 255 thì reset abc về 0
-          holdCount = 0;
-        }
+          (bit == 2)) {         // Nếu bit >= 2 (tức bit == 2)
+        holdCount = !holdCount; // Chuyển trạng thái holdCount
         Serial.print("holdCount: ");
         Serial.println(holdCount);
 
-        // Kiểm tra nếu abc là số lẻ hoặc số chẵn và điều khiển GPIO26
-        if (holdCount % 2 == 1) { // Số lẻ
+        // Kiểm tra nếu holdCount là true hoặc false để bật hoặc tắt GPIO26
+        if (holdCount) {          // true
           digitalWrite(26, HIGH); // Tắt GPIO26
-          Serial.println("GPIO26 is ON (abc is odd).");
-        } else {                 // Số chẵn
+          Serial.println("GPIO26 is ON (holdCount is odd).");
+        } else {                 // false
           digitalWrite(26, LOW); // Bật GPIO26
-          Serial.println("GPIO26 is OFF (abc is even).");
+          Serial.println("GPIO26 is OFF (holdCount is even).");
         }
       }
     }
