@@ -3,7 +3,7 @@
 #include <BLEDevice.h>
 #include <BLEServer.h>
 #include <BLEUtils.h>
-
+#include <esp_task_wdt.h>
 
 BLEServer *pServer = NULL;
 BLECharacteristic *pCharacteristic = NULL;
@@ -60,6 +60,9 @@ class MyCharacteristicCallbacks : public BLECharacteristicCallbacks {
 
 void setup() {
   Serial.begin(115200);
+  esp_task_wdt_init(10,
+                    true); // Timeout 5 giây, reset hệ thống khi quá thời gian
+  esp_task_wdt_add(NULL); // Thêm task chính vào WDT
 
   // Cấu hình LED
   pinMode(LED_PIN, OUTPUT);
@@ -112,6 +115,8 @@ void setup() {
 }
 // THỬ NGHIỆM
 void loop() {
+  // Reset Watchdog để tránh reset hệ thống
+  esp_task_wdt_reset();
   // Kiểm tra nếu có dữ liệu nhận được và xử lý
   if (receivedDataLength > 0) {
     Serial.print("Received Data in Loop: ");
