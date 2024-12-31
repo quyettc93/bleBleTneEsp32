@@ -20,6 +20,7 @@ int receivedDataLength = 0; // Để theo dõi độ dài dữ liệu nhận
 
 // Chân GPIO để điều khiển LED D2
 #define LED_PIN 2
+#define LED_PIN_WATCHDOG 32 // Chân GPIO bạn muốn điều khiển
 int gpioPins[] = {4, 5, 18, 19, 21, 22, 13, 12}; // Các chân GPIO chính
 int extendedGpioPins[] = {14, 27, 26}; // Các chân GPIO bổ sung cho byte thứ tư
 const int gpioCount = 8; // Số lượng GPIO chính được sử dụng
@@ -65,13 +66,16 @@ void setup() {
   esp_task_wdt_add(NULL); // Thêm task chính vào WDT
 
   // Cấu hình LED
+  pinMode(LED_PIN_WATCHDOG, OUTPUT);   // Đặt chân GPIO là OUTPUT
+  digitalWrite(LED_PIN_WATCHDOG, LOW); // Đảm bảo LED tắt khi bắt đầu
+
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW); // Đảm bảo LED tắt khi bắt đầu
 
   // Cấu hình các chân GPIO mới làm OUTPUT
   for (int i = 0; i < 8; i++) {
     pinMode(gpioPins[i], OUTPUT);
-    digitalWrite(gpioPins[i], HIGH); // Mặc định là 24V (HIGH)
+    digitalWrite(gpioPins[i], LOW); // Mặc định là 24V (HIGH)
   }
   for (int i = 0; i < 3; i++) {
     pinMode(extendedGpioPins[i], OUTPUT);
@@ -117,6 +121,10 @@ void setup() {
 void loop() {
   // Reset Watchdog để tránh reset hệ thống
   esp_task_wdt_reset();
+  // Nhấp nháy LED để kiểm tra hệ thống hoạt động (Watchdog)
+  digitalWrite(LED_PIN_WATCHDOG,
+               (millis() / 500) % 2); // Nhấp nháy LED mỗi 500ms
+
   // Kiểm tra nếu có dữ liệu nhận được và xử lý
   if (receivedDataLength > 0) {
     Serial.print("Received Data in Loop: ");
@@ -125,7 +133,7 @@ void loop() {
     for (int i = 0; i < gpioCount; i++) {
       if (receivedData[0] & (1 << i)) {
         Serial.printf("Bit %d active, GPIO %d to 0V\n", i, gpioPins[i]);
-        digitalWrite(gpioPins[i], LOW); // Đưa chân GPIO xuống 0V
+        digitalWrite(gpioPins[i], HIGH); // Đưa chân GPIO xuống 0V
         gpioStates[i] = true; // Đánh dấu trạng thái đang kích hoạt
         gpioTimers[i] = millis(); // Lưu thời gian bắt đầu
       }
@@ -135,6 +143,9 @@ void loop() {
     for (int bit = 0; bit < 3; bit++) {
       if ((receivedData[3] & (1 << bit)) && (bit != 2)) {
         if (!extendedGpioStates[bit]) {
+          if (bit == 1 && holdCount) {
+            return;
+          }
           Serial.printf("Extra Bit %d active, GPIO %d to 24V\n", bit,
                         extendedGpioPins[bit]);
           digitalWrite(extendedGpioPins[bit], HIGH); // Đưa chân GPIO LÊN 24v
@@ -150,10 +161,10 @@ void loop() {
 
         // Kiểm tra nếu holdCount là true hoặc false để bật hoặc tắt GPIO26
         if (holdCount) {          // true
-          digitalWrite(26, HIGH); // Tắt GPIO26
+          digitalWrite(27, HIGH); // Tắt GPIO26
           Serial.println("GPIO26 is ON (holdCount is odd).");
         } else {                 // false
-          digitalWrite(26, LOW); // Bật GPIO26
+          digitalWrite(27, LOW); // Bật GPIO26
           Serial.println("GPIO26 is OFF (holdCount is even).");
         }
       }
@@ -165,8 +176,8 @@ void loop() {
   for (int i = 0; i < gpioCount; i++) {
     if (gpioStates[i] && (millis() - gpioTimers[i] >= 1000)) {
       Serial.printf("GPIO %d to 24V\n", gpioPins[i]);
-      digitalWrite(gpioPins[i], HIGH); // Đưa chân GPIO xuống 24V
-      gpioStates[i] = false;           // Đặt lại trạng thái
+      digitalWrite(gpioPins[i], LOW); // Đưa chân GPIO xuống 24V
+      gpioStates[i] = false;          // Đặt lại trạng thái
     }
   }
 
@@ -194,6 +205,6 @@ void loop() {
 
   // Nhấp nháy LED khi có thiết bị kết nối
   if (deviceConnected) {
-    digitalWrite(LED_PIN, (millis() / 500) % 2); // Nhấp nháy LED mỗi 500ms
+    digitalWrite(LED_PIN, (millis() / 1000) % 2); // Nhấp nháy LED mỗi 500ms
   }
 }
