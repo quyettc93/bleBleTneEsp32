@@ -140,15 +140,6 @@ void loop() {
       }
     }
 
-    // Kiểm tra thời gian và tắt các GPIO chính đã kích hoạt
-    for (int i = 0; i < gpioCount; i++) {
-      if (gpioStates[i] && (millis() - gpioTimers[i] >= 1000)) {
-        Serial.printf("GPIO %d to 24V\n", gpioPins[i]);
-        digitalWrite(gpioPins[i], LOW); // Đưa chân GPIO xuống 24V
-        gpioStates[i] = false;          // Đặt lại trạng thái
-      }
-    }
-
     // Lấy byte thứ tư và xử lý 3 chân GPIO bổ sung
     for (int bit = 0; bit < 3; bit++) {
       if ((receivedData[3] & (1 << bit)) && (bit != 2)) {
@@ -181,7 +172,14 @@ void loop() {
     }
     receivedDataLength = 0; // Reset lại độ dài dữ liệu sau khi đã xử lý
   }
-
+  // Kiểm tra thời gian và tắt các GPIO chính đã kích hoạt
+  for (int i = 0; i < gpioCount; i++) {
+    if (gpioStates[i] && (millis() - gpioTimers[i] >= 1000)) {
+      Serial.printf("GPIO %d to 24V\n", gpioPins[i]);
+      digitalWrite(gpioPins[i], LOW); // Đưa chân GPIO xuống 24V
+      gpioStates[i] = false;          // Đặt lại trạng thái
+    }
+  }
   // Kiểm tra thời gian và tắt các GPIO bổ sung đã kích hoạt
   for (int i = 0; i < 3; i++) {
     if (extendedGpioStates[i] && (millis() - extendedGpioTimers[i] >= 1000)) {
