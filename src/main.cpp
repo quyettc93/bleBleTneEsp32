@@ -20,7 +20,7 @@ int receivedDataLength = 0; // Để theo dõi độ dài dữ liệu nhận
 
 // Chân GPIO để điều khiển LED D2
 #define LED_PIN 2
-#define LED_PIN_WATCHDOG 32 // Chân GPIO bạn muốn điều khiển
+#define LED_PIN_WATCHDOG 32                      // Chân GPIO Watchdog
 int gpioPins[] = {4, 5, 18, 19, 21, 22, 13, 12}; // Các chân GPIO chính
 int extendedGpioPins[] = {14, 27, 26}; // Các chân GPIO bổ sung cho byte thứ tư
 const int gpioCount = 8; // Số lượng GPIO chính được sử dụng
@@ -62,24 +62,25 @@ class MyCharacteristicCallbacks : public BLECharacteristicCallbacks {
 void setup() {
   Serial.begin(115200);
   esp_task_wdt_init(10,
-                    true); // Timeout 5 giây, reset hệ thống khi quá thời gian
+                    true); // Timeout 10 giây, reset hệ thống khi quá thời gian
   esp_task_wdt_add(NULL); // Thêm task chính vào WDT
 
-  // Cấu hình LED
+  // Cấu hình LED Watchdog
   pinMode(LED_PIN_WATCHDOG, OUTPUT);   // Đặt chân GPIO là OUTPUT
   digitalWrite(LED_PIN_WATCHDOG, LOW); // Đảm bảo LED tắt khi bắt đầu
 
+  // Cấu hình LED D2 báo hiệu kết nối
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW); // Đảm bảo LED tắt khi bắt đầu
 
   // Cấu hình các chân GPIO mới làm OUTPUT
   for (int i = 0; i < 8; i++) {
     pinMode(gpioPins[i], OUTPUT);
-    digitalWrite(gpioPins[i], LOW); // Mặc định là 24V (HIGH)
+    digitalWrite(gpioPins[i], LOW); // Mặc định là 0V (LOW)
   }
   for (int i = 0; i < 3; i++) {
     pinMode(extendedGpioPins[i], OUTPUT);
-    digitalWrite(extendedGpioPins[i], LOW); // Ban đầu đặt tHẤP (0V)
+    digitalWrite(extendedGpioPins[i], LOW); // Ban đầu đặt thấp (0V)
   }
 
   // Create the BLE Device
@@ -133,9 +134,18 @@ void loop() {
     for (int i = 0; i < gpioCount; i++) {
       if (receivedData[0] & (1 << i)) {
         Serial.printf("Bit %d active, GPIO %d to 0V\n", i, gpioPins[i]);
-        digitalWrite(gpioPins[i], HIGH); // Đưa chân GPIO xuống 0V
+        digitalWrite(gpioPins[i], HIGH); // Đưa chân GPIO lên 24v
         gpioStates[i] = true; // Đánh dấu trạng thái đang kích hoạt
         gpioTimers[i] = millis(); // Lưu thời gian bắt đầu
+      }
+    }
+
+    // Kiểm tra thời gian và tắt các GPIO chính đã kích hoạt
+    for (int i = 0; i < gpioCount; i++) {
+      if (gpioStates[i] && (millis() - gpioTimers[i] >= 1000)) {
+        Serial.printf("GPIO %d to 24V\n", gpioPins[i]);
+        digitalWrite(gpioPins[i], LOW); // Đưa chân GPIO xuống 24V
+        gpioStates[i] = false;          // Đặt lại trạng thái
       }
     }
 
@@ -170,15 +180,6 @@ void loop() {
       }
     }
     receivedDataLength = 0; // Reset lại độ dài dữ liệu sau khi đã xử lý
-  }
-
-  // Kiểm tra thời gian và tắt các GPIO chính đã kích hoạt
-  for (int i = 0; i < gpioCount; i++) {
-    if (gpioStates[i] && (millis() - gpioTimers[i] >= 1000)) {
-      Serial.printf("GPIO %d to 24V\n", gpioPins[i]);
-      digitalWrite(gpioPins[i], LOW); // Đưa chân GPIO xuống 24V
-      gpioStates[i] = false;          // Đặt lại trạng thái
-    }
   }
 
   // Kiểm tra thời gian và tắt các GPIO bổ sung đã kích hoạt
